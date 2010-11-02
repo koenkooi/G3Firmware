@@ -72,7 +72,11 @@ void pwmBOn(bool on) {
 	}
 }
 
+#if !defined(DEFAULT_EXTERNAL_STEPPER)
+#define SERVO_COUNT 1
+#else
 #define SERVO_COUNT 2
+#endif
 
 volatile int servoPos[SERVO_COUNT];
 
@@ -92,7 +96,11 @@ void ExtruderBoard::reset() {
 	TCCR1B = _BV(WGM13) | _BV(WGM12) | _BV(CS10);
 	TCCR1C = 0x00;
 	ICR1 = INTERVAL_IN_MICROSECONDS * 16;
+#if !defined(DEFAULT_EXTERNAL_STEPPER)
 	TIMSK1 = _BV(ICIE1) | _BV(OCIE1A) | _BV(OCIE1B); // turn on ICR1 match interrupt
+#else
+	TIMSK1 = _BV(ICIE1) | _BV(OCIE1A); // turn on ICR1 match interrupt
+#endif
 	TIMSK2 = 0x00; // turn off channel A PWM by default
 	// TIMER2 is used to PWM mosfet channel B on OC2A, and channel A on
 	// PC1 (using the OC2B register).
@@ -122,13 +130,21 @@ void ExtruderBoard::reset() {
 //	setUsingRelays((features & eeprom::RELAY_BOARD) != 0);
 //	setStepperMode((features & eeprom::HBRIDGE_STEPPER) != 0);
 	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
+#if defined DEFAULT_STEPPER
+#warning Using internal stepper!
+	setStepperMode(true, false);
 	PORTB &= ~_BV(1) & ~_BV(2);
 	DDRB |= _BV(1) | _BV(2);
-#ifdef DEFAULT_STEPPER
-	setStepperMode(true);
+#elif defined DEFAULT_EXTERNAL_STEPPER
+#warning Using external stepper!
+	setStepperMode(true, true);
+	PORTB &= ~_BV(1); // We don't use D10 for a servo with external steppers, it's the enable pin
+	DDRB |= _BV(1); // but it's still an output
 #else
+#warning Using DC Motor!
 	setStepperMode(false);
 #endif
+
 #ifdef DEFAULT_RELAYS
 	setUsingRelays(true);
 #else
@@ -138,6 +154,10 @@ void ExtruderBoard::reset() {
 
 void ExtruderBoard::setMotorSpeed(int16_t speed) {
 	setExtruderMotor(speed);
+}
+
+void ExtruderBoard::setMotorSpeedRPM(uint32_t speed, bool direction) {
+	setExtruderMotorRPM(speed, direction);
 }
 
 micros_t ExtruderBoard::getCurrentMicros() {
@@ -163,10 +183,14 @@ void ExtruderBoard::doInterrupt() {
 			PORTB |= _BV(1);
 			OCR1A = (600*16) + (servoPos[0]*160);
 		}
+		
+		// figure out how to make this runtime settable...
+#if defined(DEFAULT_EXTERNAL_STEPPER)
 		if (servoPos[1] != -1) {
 			PORTB |= _BV(2);
 			OCR1B = (600*16) + (servoPos[1] * 160);
 		}
+#endif
 	}
 	servo_cycle++;
 	if (servo_cycle > SERVO_CYCLE_LENGTH) { servo_cycle = 0; }

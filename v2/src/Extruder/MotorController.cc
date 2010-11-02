@@ -30,6 +30,7 @@ void MotorController::reset() {
 	paused = false;
 	on = false;
 	speed = 0;
+	setWithRPM = false;
 	backoff_state = BO_INACTIVE;
 	loadBackoffParameters();
 }
@@ -74,14 +75,23 @@ void MotorController::update() {
 				break;
 			}
 		}
-	} else {
+	} else if (!setWithRPM) {
 		int new_speed = (!paused&&on)?(direction?speed:-speed):0;
 		board.setMotorSpeed(new_speed);
+	} else {
+		board.setMotorSpeedRPM((!paused&&on) ? rpm : 0, direction);
 	}
+
 }
 
 void MotorController::setSpeed(int speed_in) {
 	speed = speed_in;
+	setWithRPM = false;
+}
+
+void MotorController::setRPMSpeed(uint32_t speed_in) {
+	rpm = speed_in;
+	setWithRPM = true;
 }
 
 void MotorController::pause() {
