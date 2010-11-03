@@ -21,6 +21,7 @@
 #include <avr/interrupt.h>
 #include "ExtruderMotor.hh"
 #include "EepromMap.hh"
+#include "ExtruderBoard.hh"
 #include <util/delay_basic.h>
 
 using namespace eeprom;
@@ -99,7 +100,7 @@ void setStepperMode(bool mode, bool external/* = false*/) {
 		OCR0A = ES_TICK_LENGTH-1; // 1/(16,000,000 / (2*8)*(1+OCR0A)) = ES_TICK_LENGTH micros/tick
 
 		// Disable interrupt for second servo, we use that pin
-		ExtruderBoard.getBoard().setServo(1, -2);
+		ExtruderBoard::getBoard().setServo(1, -2);
 	} else {
 		TCCR0A = 0b00000011;  // Leave pin off by default
 		TCCR0B = 0b00000011;
