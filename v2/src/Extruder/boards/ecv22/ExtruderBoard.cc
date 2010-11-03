@@ -148,20 +148,23 @@ void ExtruderBoard::reset() {
 */
 	
 #if defined DEFAULT_STEPPER
-	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
-#if defined DEFAULT_STEPPER
 #warning Using internal stepper!
 	setStepperMode(true, false);
+	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
 	PORTB &= ~_BV(1) & ~_BV(2);
 	DDRB |= _BV(1) | _BV(2);
 #elif defined DEFAULT_EXTERNAL_STEPPER
 #warning Using external stepper!
 	setStepperMode(true, true);
+	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
 	PORTB &= ~_BV(1); // We don't use D10 for a servo with external steppers, it's the enable pin
 	DDRB |= _BV(1); // but it's still an output
 #else
 #warning Using DC Motor!
 	setStepperMode(false);
+	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
+	PORTB &= ~_BV(1) & ~_BV(2);
+	DDRB |= _BV(1) | _BV(2);
 #endif
 
 #ifdef DEFAULT_RELAYS
