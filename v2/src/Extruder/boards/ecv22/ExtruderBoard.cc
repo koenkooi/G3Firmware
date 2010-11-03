@@ -78,7 +78,14 @@ volatile int servoPos[SERVO_COUNT];
 
 // Index 0 = D9, Index 1 = D10.  Value = -1 to turn off, 0-255 to set position.
 void ExtruderBoard::setServo(uint8_t index, int value) {
-	servoPos[0] = value;
+	// -2 == disabled, and once disabled it can't be set again
+	if (servoPos[index] != -2)
+		servoPos[index] = value;
+	
+	if (value = -2) {
+		// diable a servo, turn off it's timer
+		TIMSK1 = _BV(ICIE1) | (servoPos[0] != -2 ? _BV(OCIE1A) : 0) | (servoPos[1] != -2 ? _BV(OCIE1B) : 0);
+	}
 }
 
 void ExtruderBoard::reset() {
@@ -116,19 +123,42 @@ void ExtruderBoard::reset() {
 	setMotorSpeed(0);
 	getHostUART().enable(true);
 	getHostUART().in.reset();
+
+/*
 	// These are disabled until the newer replicatorg with eeprom path
 	// support has been out for a while.
-//	uint16_t features = getEeprom16(eeprom::FEATURES);
-//	setUsingRelays((features & eeprom::RELAY_BOARD) != 0);
-//	setStepperMode((features & eeprom::HBRIDGE_STEPPER) != 0);
+	uint16_t features = getEeprom16(eeprom::FEATURES);
+	setUsingRelays((features & eeprom::RELAY_BOARD) != 0);
+	setStepperMode((features & (eeprom::HBRIDGE_STEPPER | eeprom::EXTERNAL_STEPPER)) != 0, (features & eeprom::EXTERNAL_STEPPER) != 0);
+
+	if ((features & eeprom::EXTERNAL_STEPPER) == 0) {
+		// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
+		PORTB &= ~_BV(1);
+		DDRB |= _BV(1);
+	} else {
+		// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
+		PORTB &= ~_BV(1) & ~_BV(2);
+		DDRB |= _BV(1) | _BV(2);
+	}
+*/
+	
+#if defined DEFAULT_STEPPER
 	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
 	PORTB &= ~_BV(1) & ~_BV(2);
 	DDRB |= _BV(1) | _BV(2);
-#ifdef DEFAULT_STEPPER
-	setStepperMode(true);
+	setStepperMode(true, false);
+#elif defined DEFAULT_EXTERNAL_STEPPER
+	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
+	PORTB &= ~_BV(1);
+	DDRB |= _BV(1);
+	setStepperMode(true, true);
 #else
+	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
+	PORTB &= ~_BV(1) & ~_BV(2);
+	DDRB |= _BV(1) | _BV(2);
 	setStepperMode(false);
 #endif
+
 #ifdef DEFAULT_RELAYS
 	setUsingRelays(true);
 #else
@@ -138,6 +168,10 @@ void ExtruderBoard::reset() {
 
 void ExtruderBoard::setMotorSpeed(int16_t speed) {
 	setExtruderMotor(speed);
+}
+
+void ExtruderBoard::setMotorSpeedRPM(uint32_t speed, bool direction) {
+	setExtruderMotorRPM(speed, direction);
 }
 
 micros_t ExtruderBoard::getCurrentMicros() {
@@ -159,11 +193,12 @@ void ExtruderBoard::doInterrupt() {
 	// update servos
 	ExtruderBoard::getBoard().indicateError(0);
 	if (servo_cycle == 0) {
-		if (servoPos[0] != -1) {
+		if (servoPos[0] >= 0) {
 			PORTB |= _BV(1);
 			OCR1A = (600*16) + (servoPos[0]*160);
 		}
-		if (servoPos[1] != -1) {
+		
+		if (servoPos[1] >= 0) {
 			PORTB |= _BV(2);
 			OCR1B = (600*16) + (servoPos[1] * 160);
 		}
