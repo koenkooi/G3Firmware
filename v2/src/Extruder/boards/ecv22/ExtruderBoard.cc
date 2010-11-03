@@ -72,7 +72,11 @@ void pwmBOn(bool on) {
 	}
 }
 
+#if !defined(DEFAULT_EXTERNAL_STEPPER)
+#define SERVO_COUNT 1
+#else
 #define SERVO_COUNT 2
+#endif
 
 volatile int servoPos[SERVO_COUNT];
 
@@ -100,6 +104,7 @@ void ExtruderBoard::reset() {
 	TCCR1C = 0x00;
 	ICR1 = INTERVAL_IN_MICROSECONDS * 16;
 	TIMSK1 = _BV(ICIE1) | _BV(OCIE1A) | _BV(OCIE1B); // turn on ICR1 match interrupt
+	TIMSK1 = _BV(ICIE1) | _BV(OCIE1A); // turn on ICR1 match interrupt
 	TIMSK2 = 0x00; // turn off channel A PWM by default
 	// TIMER2 is used to PWM mosfet channel B on OC2A, and channel A on
 	// PC1 (using the OC2B register).
@@ -144,18 +149,18 @@ void ExtruderBoard::reset() {
 	
 #if defined DEFAULT_STEPPER
 	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
-	PORTB &= ~_BV(1) & ~_BV(2);
-	DDRB |= _BV(1) | _BV(2);
+#if defined DEFAULT_STEPPER
+#warning Using internal stepper!
 	setStepperMode(true, false);
-#elif defined DEFAULT_EXTERNAL_STEPPER
-	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
-	PORTB &= ~_BV(1);
-	DDRB |= _BV(1);
-	setStepperMode(true, true);
-#else
-	// Init servo ports: OC1A and OC1B as outputs when not linked to counter.
 	PORTB &= ~_BV(1) & ~_BV(2);
 	DDRB |= _BV(1) | _BV(2);
+#elif defined DEFAULT_EXTERNAL_STEPPER
+#warning Using external stepper!
+	setStepperMode(true, true);
+	PORTB &= ~_BV(1); // We don't use D10 for a servo with external steppers, it's the enable pin
+	DDRB |= _BV(1); // but it's still an output
+#else
+#warning Using DC Motor!
 	setStepperMode(false);
 #endif
 
@@ -198,10 +203,13 @@ void ExtruderBoard::doInterrupt() {
 			OCR1A = (600*16) + (servoPos[0]*160);
 		}
 		
-		if (servoPos[1] >= 0) {
+		// figure out how to make this runtime settable...
+#if defined(DEFAULT_EXTERNAL_STEPPER)
+		if (servoPos[1] != -1) {
 			PORTB |= _BV(2);
 			OCR1B = (600*16) + (servoPos[1] * 160);
 		}
+#endif
 	}
 	servo_cycle++;
 	if (servo_cycle > SERVO_CYCLE_LENGTH) { servo_cycle = 0; }
